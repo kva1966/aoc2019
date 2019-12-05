@@ -7,23 +7,33 @@ use List::Util qw( any );
 package Computer {
     use Moo;
 
-    has input => (
+    has mem => (
         is => 'ro'
     );
 
-    method evaluate() {
-        my $pos = 0;
+    has _ip => (
+        is => 'rw',
+        default => 0
+    );
 
+    has _halted => (
+        is => 'rw',
+        default => 0
+    );
+
+    method evaluate() {
         while (1) {
-            $pos = $self->handle($pos);
-            last if $pos == -1;
+            $self->handle();
+            last if $self->_halted;
         }
 
-        return $self->input;
+        return $self->mem->[0];
     };
 
-    method handle($pos) {
-        my $code = $self->input->[$pos];
+    method handle() {
+        my $pos = $self->_ip;
+
+        my $code = $self->mem->[$pos];
 
         if ($code == 1) {
             return $self->_add($pos);
@@ -32,35 +42,47 @@ package Computer {
             return $self->_multiply($pos);
         }
         elsif ($code == 99) {
-            return -1;
+            $self->_halt();
         }
         else {
             die "Bad code[$code]";
         }
     }
 
+    method init_state($noun, $verb) {
+        $self->mem->[1] = $noun;
+        $self->mem->[2] = $verb;
+
+        return $self;
+    }
+
     method _add($pos) {
         my ($a, $b) = $self->_get_operands($pos);
-        return $self->_set($pos, $a + $b);
+        $self->_set($pos, $a + $b);
     }
 
     method _multiply($pos) {
         my ($a, $b) = $self->_get_operands($pos);
-        return $self->_set($pos, $a * $b);
+        $self->_set($pos, $a * $b);
     }
 
     method _set($pos, $res) {
-        my $outpos = $self->input->[$pos + 3];
-        $self->input->[$outpos] = $res;
-        return $pos + 4;
+        my $outpos = $self->mem->[$pos + 3];
+        $self->mem->[$outpos] = $res;
+        $self->_ip($self->_ip + 4);
     }
 
     method _get_operands($pos) {
         my $getfn = fun ($p) {
-            my $v = $self->input->[$p];
-            return $self->input->[$v];
+            my $v = $self->mem->[$p];
+            return $self->mem->[$v];
         };
         return ( $getfn->($pos + 1), $getfn->($pos + 2) );
+    }
+
+    method _halt() {
+        $self->_ip($self->_ip + 1);
+        $self->_halted(1);
     }
 };
 
@@ -69,7 +91,7 @@ fun compute($s, $debug=0) {
     my @input = split m/,/, $s;
 
     say STDERR "Input: " . Dumper(\@input) if $debug;
-    my $output = new Computer(input => \@input)->evaluate();
+    my $output = new Computer(mem => \@input)->evaluate();
 
     say STDERR "Output: " . Dumper($output) if $debug;
     return $output;
@@ -83,14 +105,43 @@ fun _test() {
     $fn->('1,1,1,4,99,5,6,0,99');
 }
 
+fun _part2($mem) {
+    my @res;
+
+    my @nouns = (0 .. 100);
+    my @verbs = (0 .. 100);
+
+    outerloop: for my $noun (@nouns) {
+        for my $verb (@verbs) {
+            my @memory = @{$mem};
+            my $output = new Computer(mem => \@memory)->init_state($noun, $verb)->evaluate();
+            if ($output == 19690720) {
+                @res = ($noun, $verb);
+                print "$noun,$verb => $output\n";
+                last outerloop;
+            }
+        }
+    }
+
+    die "No result found!" if (scalar @res) == 0;
+    use Data::Dumper::Concise; say STDERR Dumper(\@res);
+    my ($noun, $verb) = @res;
+    print("Result($noun|$verb): " . (100 * $noun + $verb) . "\n");
+}
+
+fun _part1($mem) {
+    my @inputcopy = @{$mem};
+    my $computer = new Computer(mem => \@inputcopy)->init_state(12, 2);
+    my $output = $computer->evaluate();
+
+    print $output . "\n";
+}
+
 # _test();
 
 open(my $fh, "./input.dat") or die "Couldn't open input file $!";
 my $str = <$fh>;
 my @input = split m/,/, $str;
 
-$input[1] = 12;
-$input[2] = 2;
-my $output = new Computer(input => \@input)->evaluate();
-
-print $output->[0] . "\n";
+_part1(\@input);
+_part2(\@input)
