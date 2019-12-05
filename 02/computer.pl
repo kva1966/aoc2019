@@ -21,22 +21,21 @@ package Computer {
     );
 
     method evaluate() {
-        while (1) {
-            $self->handle();
-            last if $self->_halted;
+        while (!$self->_halted) {
+            $self->_exec_op();
         }
 
         return $self->mem->[0];
     };
 
-    method handle() {
+    method _exec_op() {
         my $code = $self->mem->[$self->_ip];
 
         if ($code == 1) {
-            return $self->_add();
+            $self->_add();
         }
         elsif ($code == 2) {
-            return $self->_multiply();
+            $self->_multiply();
         }
         elsif ($code == 99) {
             $self->_halt();
