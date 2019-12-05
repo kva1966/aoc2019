@@ -2,7 +2,6 @@
 
 use Data::Dumper::Concise; 
 use Function::Parameters;
-use List::Util qw( any );
 
 package Computer {
     use Moo;
@@ -31,15 +30,13 @@ package Computer {
     };
 
     method handle() {
-        my $pos = $self->_ip;
-
-        my $code = $self->mem->[$pos];
+        my $code = $self->mem->[$self->_ip];
 
         if ($code == 1) {
-            return $self->_add($pos);
+            return $self->_add();
         }
         elsif ($code == 2) {
-            return $self->_multiply($pos);
+            return $self->_multiply();
         }
         elsif ($code == 99) {
             $self->_halt();
@@ -56,27 +53,29 @@ package Computer {
         return $self;
     }
 
-    method _add($pos) {
-        my ($a, $b) = $self->_get_operands($pos);
-        $self->_set($pos, $a + $b);
+    method _add() {
+        my ($a, $b) = $self->_get_operands();
+        $self->_set($a + $b);
     }
 
-    method _multiply($pos) {
-        my ($a, $b) = $self->_get_operands($pos);
-        $self->_set($pos, $a * $b);
+    method _multiply() {
+        my ($a, $b) = $self->_get_operands();
+        $self->_set($a * $b);
     }
 
-    method _set($pos, $res) {
-        my $outpos = $self->mem->[$pos + 3];
+    method _set($res) {
+        my $outpos = $self->mem->[$self->_ip + 3];
         $self->mem->[$outpos] = $res;
         $self->_ip($self->_ip + 4);
     }
 
-    method _get_operands($pos) {
+    method _get_operands() {
         my $getfn = fun ($p) {
             my $v = $self->mem->[$p];
             return $self->mem->[$v];
         };
+
+        my $pos = $self->_ip;
         return ( $getfn->($pos + 1), $getfn->($pos + 2) );
     }
 
@@ -91,13 +90,15 @@ fun compute($s, $debug=0) {
     my @input = split m/,/, $s;
 
     say STDERR "Input: " . Dumper(\@input) if $debug;
-    my $output = new Computer(mem => \@input)->evaluate();
+    my $computer = new Computer(mem => \@input);
+    my $output = $computer->evaluate();
 
-    say STDERR "Output: " . Dumper($output) if $debug;
+    say STDERR "Output: res[$output], mem:" . Dumper($computer->mem) if $debug;
     return $output;
 }
 
-fun _test() {
+fun _test(:$debug = 0) {
+    return if !$debug;
     my $fn = fun($s) { compute($s, 1); };
     $fn->('1,0,0,0,99');
     $fn->('2,3,0,3,99');
@@ -110,12 +111,14 @@ fun _part2($mem) {
 
     my @nouns = (0 .. 100);
     my @verbs = (0 .. 100);
+    my $expected_result = 19690720;
 
+    # Brute forcing? Any better/faster way, e.g. binary search
     outerloop: for my $noun (@nouns) {
         for my $verb (@verbs) {
             my @memory = @{$mem};
             my $output = new Computer(mem => \@memory)->init_state($noun, $verb)->evaluate();
-            if ($output == 19690720) {
+            if ($output == $expected_result) {
                 @res = ($noun, $verb);
                 print "$noun,$verb => $output\n";
                 last outerloop;
@@ -124,7 +127,7 @@ fun _part2($mem) {
     }
 
     die "No result found!" if (scalar @res) == 0;
-    use Data::Dumper::Concise; say STDERR Dumper(\@res);
+    say STDERR Dumper(\@res);
     my ($noun, $verb) = @res;
     print("Result($noun|$verb): " . (100 * $noun + $verb) . "\n");
 }
@@ -137,7 +140,7 @@ fun _part1($mem) {
     print $output . "\n";
 }
 
-# _test();
+_test(debug => 0);
 
 open(my $fh, "./input.dat") or die "Couldn't open input file $!";
 my $str = <$fh>;
